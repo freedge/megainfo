@@ -204,13 +204,20 @@ struct mfi_ld_info {
     uint8_t reserved2[16];
 } QEMU_PACKED;
 
+
+// my own stuff then
+
+enum {
+	DATA_LEN = 512
+};
+
 void autofree(void* ptr_ptr) {
 	void* ptr = (void*) *((uintptr_t*) ptr_ptr);
 	free(ptr);
 }
 void automunmap(void* ptr_ptr) {
 	void* ptr = (void*) *((uintptr_t*) ptr_ptr);
-	assert(munmap(ptr, 512) == 0);
+	assert(munmap(ptr, DATA_LEN) == 0);
 }
 void autoclose(void* ptr) {
 	int* fd = (int*) ptr;
@@ -235,9 +242,6 @@ void sanitize(char* buf) {
 	}
 }
 
-enum {
-	DATA_LEN = 512
-};
 int main(int argc, char* argv[]) {
 	if (argc != 3) {
 		fprintf(stderr, "usage: %s host_no /dev/megaraid_sas_ioctl_node\n\n"
@@ -341,6 +345,7 @@ int main(int argc, char* argv[]) {
 		printf("%02x", ld_info->vpd_page83[i]);
 	}
 	printf("\n");
+	printf("MEGA_LD_CO_RA=%d,%d\n", ld_info->cluster_owner, ld_info->reconstruct_active);
 
 	return 0;
 }
