@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <assert.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 
 // bunch of stuff from Linux
@@ -225,8 +226,7 @@ void autoclose(void* ptr) {
 		close(*fd);
 }
 
-void sanitize(char* buf) {
-        char* p = buf;
+bool is_ok(char* p) {
 	for (int i = 0; *p && i < 16; i++, p++) {
 		if ((*p >= '@' && *p <= 'Z') ||
 		    (*p >= 'a' && *p <= 'z') ||
@@ -236,10 +236,10 @@ void sanitize(char* buf) {
 			// is fine
 		} else {
 			fprintf(stderr, "found invalid character in name 0x%02x\n", *p);
-			buf[0] = 0;
-			break;
+			return false;
 		}
 	}
+	return true;
 }
 
 int main(int argc, char* argv[]) {
@@ -299,12 +299,9 @@ int main(int argc, char* argv[]) {
 	}
 
 
-	char buf[1 + sizeof(ld_info->ld_config.properties.name)];
-	memset(buf, '\0', sizeof(buf));
-	strncpy(buf, ld_info->ld_config.properties.name, sizeof(buf));
-	sanitize(buf);
-	if (buf[0] != 0) {
-		printf("MEGA_LD_NAME=%s\n", ld_info->ld_config.properties.name);
+	char* buf = ld_info->ld_config.properties.name;
+	if (buf[0] && is_ok(buf)) {
+		printf("MEGA_LD_NAME=%.16s\n", buf);
 	}
 	printf("MEGA_LD_PROPERTIES=%d,%d,%d,%d,%d,%d,%d\n", 
 			ld_info->ld_config.properties.ld.v.target_id,
