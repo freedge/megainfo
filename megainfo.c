@@ -8,6 +8,8 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <assert.h>
+#include <unistd.h>
 
 
 // bunch of stuff from Linux
@@ -202,16 +204,48 @@ struct mfi_ld_info {
     uint8_t reserved2[16];
 } QEMU_PACKED;
 
+void autofree(void* ptr_ptr) {
+	void* ptr = (void*) *((uintptr_t*) ptr_ptr);
+	free(ptr);
+}
+void automunmap(void* ptr_ptr) {
+	void* ptr = (void*) *((uintptr_t*) ptr_ptr);
+	assert(munmap(ptr, 512) == 0);
+}
+void autoclose(void* ptr) {
+	int* fd = (int*) ptr;
+	if (*fd > 0)
+		close(*fd);
+}
 
+void sanitize(char* buf) {
+        char* p = buf;
+	for (int i = 0; *p && i < 16; i++, p++) {
+		if ((*p >= '@' && *p <= 'Z') ||
+		    (*p >= 'a' && *p <= 'z') ||
+		    (*p >= '0' && *p <= '9') ||
+		    (*p == '-') ||
+		    (*p == '_')) {
+			// is fine
+		} else {
+			fprintf(stderr, "found invalid character in name 0x%02x\n", *p);
+			buf[0] = 0;
+			break;
+		}
+	}
+}
 
+enum {
+	DATA_LEN = 512
+};
 int main(int argc, char* argv[]) {
 	if (argc != 3) {
-		fprintf(stderr, "usage: %s host_no /dev/megaraid_sas_ioctl_node\n"
+		fprintf(stderr, "usage: %s host_no /dev/megaraid_sas_ioctl_node\n\n"
 				"This also retrieves the inquiry page that can be read with\n"
 				" sg_inq --inhex=<(echo $MEGA_LD_VPD_PAGE83 | tr _ ' ')\n", argv[0]);
 		return -1;
 	}
-	int fd=open(argv[2], O_RDONLY);
+	int fd __attribute__ ((__cleanup__(autoclose))) = open(argv[2], O_RDONLY);
 	if (fd < 1) {
 		fprintf(stderr, "open failed %s . Note that device needs to be created with\n"
 		     "  mknod /dev/megaraid_sas_ioctl_node c `grep -o -P '^\\d\\d\\d(?= megaraid_sas_ioctl)' /proc/devices` 0\n", strerror(errno));
@@ -219,7 +253,8 @@ int main(int argc, char* argv[]) {
 	}
 
 
-	struct megasas_iocpacket *ioc = malloc(sizeof(struct megasas_iocpacket));
+	struct megasas_iocpacket *ioc __attribute__ ((__cleanup__(autofree))) = malloc(sizeof(struct megasas_iocpacket));
+	assert(ioc);
 	memset(ioc, '\0', sizeof(struct megasas_iocpacket));
 	ioc->host_no = atoi(argv[1]);
 	ioc->sgl_off = 40;
@@ -229,24 +264,21 @@ int main(int argc, char* argv[]) {
 	frame->cmd = MFI_CMD_DCMD;
 	frame->cmd_status = 0;
 	frame->opcode = MFI_DCMD_LD_GET_INFO;
-	frame->data_xfer_len = 512;
+	frame->data_xfer_len = DATA_LEN;
 	frame->flags = MFI_FRAME_DIR_READ;
 	frame->sge_count = 1;
 
-	u8* u = mmap(0, 10000,
+	u8* u __attribute__ ((__cleanup__(automunmap))) = mmap(0, DATA_LEN,
     		PROT_READ | PROT_WRITE,
     		MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT,
     		-1, 0
 	);
-	if (u == MAP_FAILED) {
-		fprintf(stderr, "mmap failed %s\n", strerror(errno));
-		return -1;
-	}
-	memset(u, '\0', 10000);
+	assert(u != MAP_FAILED);
+	memset(u, '\0', DATA_LEN);
 	frame->sgl.sge32.phys_addr = (__le32)(uintptr_t) u;
-	frame->sgl.sge32.length = 512;
+	frame->sgl.sge32.length = DATA_LEN;
 	ioc->sgl[0].iov_base = u;
-	ioc->sgl[0].iov_len = 512;
+	ioc->sgl[0].iov_len = DATA_LEN;
 
 	int res = ioctl (fd, MEGASAS_IOC_FIRMWARE, ioc);
 	if (res < 0) {
@@ -258,17 +290,28 @@ int main(int argc, char* argv[]) {
 		fprintf(stderr, "invalid page code\n");
 		return -1;
 	}
+	if (ld_info->ld_config.params.span_depth > MFI_MAX_SPAN_DEPTH) {
+		fprintf(stderr, "invalid span depth\n");
+	}
 
 
-	printf("MEGA_LD_NAME=%s\n", ld_info->ld_config.properties.name);
-	printf("MEGA_LD_PROPERTIES=%d,%d,%d,%d,%d\n", 
+	char buf[1 + sizeof(ld_info->ld_config.properties.name)];
+	memset(buf, '\0', sizeof(buf));
+	strncpy(buf, ld_info->ld_config.properties.name, sizeof(buf));
+	sanitize(buf);
+	if (buf[0] != 0) {
+		printf("MEGA_LD_NAME=%s\n", ld_info->ld_config.properties.name);
+	}
+	printf("MEGA_LD_PROPERTIES=%d,%d,%d,%d,%d,%d,%d\n", 
+			ld_info->ld_config.properties.ld.v.target_id,
+			ld_info->ld_config.properties.ld.v.seq,
 			ld_info->ld_config.properties.default_cache_policy,
 			ld_info->ld_config.properties.access_policy,
 			ld_info->ld_config.properties.disk_cache_policy,
 			ld_info->ld_config.properties.current_cache_policy,
 			ld_info->ld_config.properties.no_bgi
 	      ); 
-	printf("MEGA_LD_PARAMS=%d,%d,%d,%d,%d,%d,%d,%d,%d\n", 
+	printf("MEGA_LD_PARAMS=%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
 			ld_info->ld_config.params.primary_raid_level,
 			ld_info->ld_config.params.raid_level_qualifier,
 			ld_info->ld_config.params.secondary_raid_level,
@@ -279,6 +322,14 @@ int main(int argc, char* argv[]) {
 			ld_info->ld_config.params.init_state,
 			ld_info->ld_config.params.is_consistent
 	      ); 
+	for (int i = 0; i < ld_info->ld_config.params.span_depth; i++) {
+		printf("MEGA_LD_SPAN_%d=%ld,%ld,%d", i,
+				ld_info->ld_config.span[i].start_block,
+				ld_info->ld_config.span[i].num_blocks,
+				ld_info->ld_config.span[i].array_ref);
+	}
+	printf("\n");
+
 	printf("MEGA_LD_SIZE=%ld\n", ld_info->size);
 	printf("MEGA_LD_VPD_PAGE83=");
 	for (int i = 0; i < 0x28; i++) {

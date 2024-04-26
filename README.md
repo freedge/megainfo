@@ -1,8 +1,12 @@
+[![Docker Repository on Quay](https://quay.io/repository/frigault/megainfo/status "Docker Repository on Quay")](https://quay.io/repository/frigault/megainfo)
+
 Find the virtual disk name / wwn association.
 
 ```
 mknod /dev/megaraid_sas_ioctl_node c `grep -o -P '^\d\d\d(?= megaraid_sas_ioctl)' /proc/devices` 0
 megainfo 0 /dev/megaraid_sas_ioctl_node
+# or
+podman run --network=none --privileged --device /dev/megaraid_sas_ioctl_node quay.io/frigault/megainfo:latest 0 /dev/megaraid_sas_ioctl_node
 
 MEGA_LD_NAME=vd-root
 MEGA_LD_PROPERTIES=5,0,0,5,0
@@ -17,7 +21,7 @@ TODO:
 - write a udev rule to create device automatically
 
 
-reference:
+References:
 - https://github.com/bonzini/qemu/blob/master/hw/scsi/megasas.c
 - https://github.com/hmage/megactl/blob/master/megaioctl.c
 - https://github.com/torvalds/linux/blob/master/drivers/scsi/megaraid/megaraid_sas.h
