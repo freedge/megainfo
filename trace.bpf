@@ -1,0 +1,62 @@
+
+struct iovec {
+        uint64_t base;
+        uint64_t len;
+};
+
+struct megasas_sge64 {
+        uint32_t phys_addr;
+        uint32_t length;
+        uint32_t _pad;
+};
+
+struct megasas_dcmd_frame {
+        uint8_t cmd;
+        uint8_t reserved_0;
+        uint8_t cmd_status;
+        uint8_t reserved_1[4];
+        uint8_t sge_count;
+        uint32_t context;
+        uint32_t pad_0;
+        uint16_t flags;
+        uint16_t timeout;
+        uint32_t data_xfer_len;
+        uint32_t opcode;
+        uint32_t mbox          [3]; // +40 byte so far
+        struct megasas_sge64 sgl;   // +52 byte so far;
+        uint32_t pad[19];
+};
+
+struct megasas_iocpacket {
+        uint16_t host_no;
+        uint16_t __pad1;
+        uint32_t sgl_off;
+        uint32_t sge_count;
+        uint32_t sense_off;
+        uint32_t sense_len;
+        struct megasas_dcmd_frame frame;
+        struct iovec sgl[16];
+};
+
+
+tracepoint:syscalls:sys_enter_ioctl {
+  if (comm == "megainfo" || comm == "perccli64" || comm=="smartctl" || comm=="megactl") {
+    $iocpacket = (struct megasas_iocpacket*) args->arg;
+    $frame = $iocpacket->frame;
+    @offset = 0;
+    if (args->cmd == 0xC1944D01 &&  $frame.opcode == 0x03020000) {
+      printf("[%d:%s] host_no=%d sys=%d fd=%d cmd=0x%X cmd=%d status=%d flags=%d opcode=0x%08X xfer=%d sge_count=%d sgl_off=%d iovec %08X %lld 0x%X %d\n", pid, comm, $iocpacket->host_no, args->__syscall_nr, args->fd, args->cmd, $frame.cmd , $frame.cmd_status, $frame.flags, $frame.opcode, $frame.data_xfer_len, $frame.sge_count, $iocpacket->sgl_off, $frame.sgl.phys_addr, $frame.sgl.length, $iocpacket->sense_off, $iocpacket->sense_len);
+      printf("[] 0x%X, %d, %d 0x%X %d %X %d %X %X %X\n", $frame.context, $frame.timeout, $frame.mbox[0], $iocpacket->sgl[0].base, $iocpacket->sgl[0].len, $iocpacket->sense_off, $iocpacket->sense_len, $frame.mbox[0], $frame.mbox[1], $frame.mbox[2]);
+
+      @offset =  $frame.sgl.phys_addr;
+    }
+  }
+}
+
+tracepoint:syscalls:sys_exit_ioctl {
+  if (@offset != 0 && (comm == "megainfo" || comm == "perrcli64" || comm=="smartctl" || comm=="megactl")) {
+    printf("%c%c%c%c", ((uint8*) @offset)[4], ((uint8*) @offset)[5], ((uint8*) @offset)[6], ((uint8*) @offset)[7]);
+    printf("%c%c%c%c\n", ((uint8*) @offset)[8], ((uint8*) @offset)[9], ((uint8*) @offset)[10], ((uint8*) @offset)[11]);
+  }
+}
+
