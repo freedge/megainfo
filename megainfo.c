@@ -54,9 +54,11 @@ bool is_ok(char* p) {
 
 int main(int argc, char* argv[]) {
 	if (argc != 4) {
-		fprintf(stderr, "usage: %s host_no mbox_0 /dev/megaraid_sas_ioctl_node\n\n"
+		fprintf(stderr, "usage: %s host_no ld_no /dev/megaraid_sas_ioctl_node\n\n"
 				"This also retrieves the inquiry page that can be read with\n"
-				" sg_inq --inhex=<(echo $MEGA_LD_VPD_PAGE83 | tr _ ' ')\n", argv[0]);
+				"  sg_inq --inhex=<(echo $MEGA_LD_VPD_PAGE83 | tr _ ' ')\n"
+				"Count of ld available for each host_no can be taken from\n"
+				"  od /sys/kernel/debug/megaraid_sas/scsi_host0/raidmap_dump -j 32 -N 2 -i -A none\n", argv[0]);
 		return -1;
 	}
 	int fd __attribute__ ((__cleanup__(autoclose))) = open(argv[3], O_RDONLY);
