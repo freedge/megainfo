@@ -13,7 +13,7 @@ megainfo 0 0 /dev/megaraid_sas_ioctl_node
 # or
 podman run --network=none --cap-add sys_admin --device /dev/megaraid_sas_ioctl_node quay.io/frigault/megainfo:latest 0 0 /dev/megaraid_sas_ioctl_node
 # or
-podman run --network=none --cap-add sys_admin  --device /dev/megaraid_sas_ioctl_node ghcr.io/freedge/megainfo:main 0 1 /dev/megaraid_sas_ioctl_node
+podman run --network=none --cap-add sys_admin --device /dev/megaraid_sas_ioctl_node ghcr.io/freedge/megainfo:main 0 1 /dev/megaraid_sas_ioctl_node
 
 MEGA_LD_NAME=vd-root
 MEGA_LD_PROPERTIES=5,0,0,5,0
@@ -23,8 +23,12 @@ MEGA_LD_VPD_PAGE83=00_83_00_14_...
 MEGA_LD_WWN=6d0946...
 ```
 
-TODO:
-- write a udev rule to create device automatically
+To just dump all the vd names and their wwn:
+```
+for i in `seq 0 $(($(od /sys/kernel/debug/megaraid_sas/scsi_host0/raidmap_dump -j 32 -N 2 -i -A none )- 1))` ;do bash -c "source <(./megainfo 0 $i  /dev/megaraid_sas_ioctl_node) && [[ -n \${MEGA_LD_NAME} ]] && echo \${MEGA_LD_NAME}=\${MEGA_LD_WWN}"; done
+```
+
+To plug that into udev: see megainfo.sh and 69-mine.rule
 
 
 References:
