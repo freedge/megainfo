@@ -1,8 +1,14 @@
 FROM quay.io/centos/centos:stream9 AS build
 WORKDIR /src
-RUN dnf install -y make gcc pciutils-devel
+# we install glibc-static and build a static binary
+# that can be extracted from the image and run on older systems
+RUN dnf -y install 'dnf-command(config-manager)'
+RUN dnf -y config-manager --set-enabled crb
+RUN dnf install -y make gcc pciutils-devel glibc-static
 COPY *.c .
+COPY *.h .
 COPY Makefile .
+ENV LDFLAGS="-static -O3"
 RUN make
 
 FROM quay.io/centos/centos:stream9-minimal

@@ -1,6 +1,6 @@
 
-CFLAGS=-Wall -O3 -pedantic -Werror -std=gnu17
-LDFLAGS=-O3
+CFLAGS ?= -Wall -O3 -pedantic -Werror -std=gnu17
+LDFLAGS ?= -O3
 all: megainfo
 
 megainfo: megainfo.o
