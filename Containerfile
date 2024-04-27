@@ -13,5 +13,7 @@ RUN make
 
 FROM quay.io/centos/centos:stream9-minimal
 COPY --from=build /src/megainfo /usr/bin/megainfo
+# seems necessary to access the device
+LABEL io.containers.capabilities=SYS_ADMIN
 ENTRYPOINT ["/usr/bin/megainfo"]
 

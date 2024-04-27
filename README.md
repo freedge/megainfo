@@ -6,7 +6,7 @@ Find the virtual disk name / wwn association.
 mknod /dev/megaraid_sas_ioctl_node c `grep -o -P '^\d\d\d(?= megaraid_sas_ioctl)' /proc/devices` 0
 megainfo 0 0 /dev/megaraid_sas_ioctl_node
 # or
-podman run --network=none --privileged --device /dev/megaraid_sas_ioctl_node quay.io/frigault/megainfo:latest 0 0 /dev/megaraid_sas_ioctl_node
+podman run --network=none --cap-add sys_admin --device /dev/megaraid_sas_ioctl_node quay.io/frigault/megainfo:latest 0 0 /dev/megaraid_sas_ioctl_node
 
 MEGA_LD_NAME=vd-root
 MEGA_LD_PROPERTIES=5,0,0,5,0
