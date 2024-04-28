@@ -29,7 +29,7 @@ To just dump all the vd names and their wwn:
 for i in `seq 0 $(($(od /sys/kernel/debug/megaraid_sas/scsi_host0/raidmap_dump -j 32 -N 2 -i -A none )- 1))` ;do bash -c "source <(./megainfo 0 $i  /dev/megaraid_sas_ioctl_node) && [[ -n \${MEGA_LD_NAME} ]] && echo \${MEGA_LD_NAME}=\${MEGA_LD_WWN}"; done
 ```
 
-To plug that into udev: see megainfo.sh and 69-mine.rule
+To plug that into udev: see megainfo.sh and 69-megainfo.rules
 
 Packaged as an RPM https://copr.fedorainfracloud.org/coprs/frigo/megainfo/
 
