@@ -1,2 +1,7 @@
 megainfo
 *.o
+*.log
+*.gz
+*.rpm
+x86_64/
+megainfo-*/

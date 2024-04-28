@@ -2,6 +2,7 @@
 [![Create and publish a Docker image](https://github.com/freedge/megainfo/actions/workflows/ci.yaml/badge.svg)](https://github.com/freedge/megainfo/actions/workflows/ci.yaml)
 
 Find the virtual disk name / wwn association.
+Use at your own risks.
 
 ```
 # for a given host find the amount of available vd. Both numbers will need to be specified
@@ -30,6 +31,7 @@ for i in `seq 0 $(($(od /sys/kernel/debug/megaraid_sas/scsi_host0/raidmap_dump -
 
 To plug that into udev: see megainfo.sh and 69-mine.rule
 
+Packaged as an RPM https://copr.fedorainfracloud.org/coprs/frigo/megainfo/
 
 References:
 - https://github.com/bonzini/qemu/blob/master/hw/scsi/megasas.c
