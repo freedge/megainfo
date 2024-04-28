@@ -36,6 +36,7 @@ void autoclose(void* ptr) {
 		close(*fd);
 }
 
+// only dump the name if it contains a specific set of chars
 bool is_ok(char* p) {
 	for (int i = 0; *p && i < 16; i++, p++) {
 		if ((*p >= '@' && *p <= 'Z') ||
@@ -52,13 +53,37 @@ bool is_ok(char* p) {
 	return true;
 }
 
+// read the wwn from inquiry page 0x83
+bool read_wwn(char* buf, uint8_t* page83) {
+	// reading the doc https://support.hpe.com/hpesc/public/docDisplay?docId=sd00001714en_us&docLocale=en_US&page=GUID-D7147C7F-2016-0901-065E-000000000484.html
+	// however page_length is on byte 3 in practice
+	if ((page83[0] == 0)          && // supported peripheral
+	    (page83[3] == 20)         && // page length
+	    ((page83[4] & 0x03) == 1) && // codeset: 1 binary
+	    ((page83[5] & 0x03) == 3) && // identifier type: NAA
+    	    (page83[7] == 16)         && // identifier length
+	    ((page83[8] & 0xF0) == 0x60) // NAA 6 format
+	   ){
+		for (int i = 8; i < 24; i++) {
+			buf += sprintf(buf, "%02x", page83[i]);
+		}
+		return true;
+
+	}
+	return false;
+}
+
 int main(int argc, char* argv[]) {
-	if (argc != 4) {
-		fprintf(stderr, "usage: %s host_no ld_no /dev/megaraid_sas_ioctl_node\n\n"
+	if (argc != 4 && argc != 5) {
+		fprintf(stderr, "usage: %s host_no ld_no /dev/megaraid_sas_ioctl_node [wwn]\n\n"
 				"This also retrieves the inquiry page that can be read with\n"
 				"  sg_inq --inhex=<(echo $MEGA_LD_VPD_PAGE83 | tr _ ' ')\n"
 				"Count of ld available for each host_no can be taken from\n"
-				"  od /sys/kernel/debug/megaraid_sas/scsi_host0/raidmap_dump -j 32 -N 2 -i -A none\n", argv[0]);
+				"  od /sys/kernel/debug/megaraid_sas/scsi_host0/raidmap_dump -j 32 -N 2 -i -A none\n"
+				"If wwn is specified, only dump information if this wwn is matching\n", argv[0]);
+		return -1;
+	}
+	if (argc == 5 && 32 != strlen(argv[4])) {
 		return -1;
 	}
 	int fd __attribute__ ((__cleanup__(autoclose))) = open(argv[3], O_RDONLY);
@@ -117,6 +142,18 @@ int main(int argc, char* argv[]) {
 	if (ld_info->ld_config.params.span_depth > MFI_MAX_SPAN_DEPTH) {
 		fprintf(stderr, "invalid span depth\n");
 	}
+	char wwn[33];
+	memset(wwn, '\0', sizeof(wwn));
+	if (read_wwn(wwn, ld_info->vpd_page83)) {
+		if (argc == 5 && strncmp(wwn, argv[4], sizeof(wwn)) != 0) {
+			return 1;
+		}
+		printf("MEGA_LD_WWN=%s\n", wwn);
+	} else {
+		if (argc == 5) {
+			return 1;
+		}
+	}
 
 
 	char* buf = ld_info->ld_config.properties.name;
@@ -155,21 +192,6 @@ int main(int argc, char* argv[]) {
 	printf("MEGA_LD_VPD_PAGE83=");
 	for (uint8_t i = 0; i < ld_info->vpd_page83[3] + 8; i++) {
 		printf("%02x_", ld_info->vpd_page83[i]);
-	}
-	printf("\n");
-	// reading the doc https://support.hpe.com/hpesc/public/docDisplay?docId=sd00001714en_us&docLocale=en_US&page=GUID-D7147C7F-2016-0901-065E-000000000484.html
-	// however page_length is on byte 3 in practice
-	if ((ld_info->vpd_page83[0] == 0)          && // supported peripheral
-	    (ld_info->vpd_page83[3] == 20)         && // page length
-	    ((ld_info->vpd_page83[4] & 0x03) == 1) && // codeset: 1 binary
-	    ((ld_info->vpd_page83[5] & 0x03) == 3) && // identifier type: NAA
-    	    (ld_info->vpd_page83[7] == 16)         && // identifier length
-	    ((ld_info->vpd_page83[8] & 0xF0) == 0x60) // NAA 6 format
-	   ){
-		printf("MEGA_LD_WWN=");
-		for (int i = 8; i < 24; i++) {
-			printf("%02x", ld_info->vpd_page83[i]);
-		}
 	}
 	printf("\n");
 	printf("MEGA_LD_CO_RA=%d,%d\n", ld_info->cluster_owner, ld_info->reconstruct_active);

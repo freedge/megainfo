@@ -2,9 +2,12 @@ ACTION=="remove", GOTO="mine_end"
 SUBSYSTEM!="block", GOTO="mine_end"
 KERNEL!="sd*[!0-9]", GOTO="mine_end"
 
+ENV{SCSI_IDENT_LUN_NAA_REGEXT}!="?*", GOTO="mine_end"
+ENV{SCSI_MODEL}!="PERC*", GOTO="mine_end"
+
 SUBSYSTEMS=="scsi", KERNELS=="[0-9]*:*[0-9]", \
   ENV{.SYSFS_PATH}="$sys/class/scsi_device/$id/device"
 
-IMPORT{program}="/root/megainfo.sh $env{.SYSFS_PATH}"
+IMPORT{program}="/root/megainfo.sh $env{.SYSFS_PATH} $env{SCSI_IDENT_LUN_NAA_REGEXT}"
 ENV{MEGA_LD_NAME}=="?*", SYMLINK+="disk/by-label/mega-$env{MEGA_LD_NAME}"
 LABEL="mine_end"
