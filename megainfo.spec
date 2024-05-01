@@ -10,7 +10,7 @@ Summary:        discover megaraid perc vd name
 
 License:        GPLv2+
 URL:            https://github.com/freedge/megainfo/
-Source0:        https://github.com/freedge/megainfo/archive/refs/tags/1.0.1.tar.gz
+Source0:        https://github.com/freedge/megainfo/archive/refs/tags/%{version}.tar.gz
 
 BuildRequires:  make gcc pciutils-devel glibc-static
 
@@ -30,18 +30,17 @@ make LDFLAGS="-O2 -static -g" CFLAGS="-O2 -g"
 %install
 mkdir -p $RPM_BUILD_ROOT%{_udevrulesdir}
 install -p -m 644 69-megainfo.rules $RPM_BUILD_ROOT/%{_udevrulesdir}/69-megainfo.rules
-install -p -m 644 69-bossinfo.rules $RPM_BUILD_ROOT/%{_udevrulesdir}/69-bossinfo.rules
+install -p -m 644 69-boss.rules $RPM_BUILD_ROOT/%{_udevrulesdir}/69-bossinfo.rules
 install -p -m 755 megainfo $RPM_BUILD_ROOT%{_udevlibdir}
 install -p -m 755 megainfo.sh $RPM_BUILD_ROOT%{_udevlibdir}
-install -p -m 755 bossinfo $RPM_BUILD_ROOT%{_udevlibdir}
 install -p -m 755 bossinfo.sh $RPM_BUILD_ROOT%{_udevlibdir}
 
 
 %files
 %{_udevrulesdir}/69-megainfo.rules
+%{_udevrulesdir}/69-bossinfo.rules
 %{_udevlibdir}/megainfo
 %{_udevlibdir}/megainfo.sh
-%{_udevlibdir}/bossinfo
 %{_udevlibdir}/bossinfo.sh
 
 %changelog
