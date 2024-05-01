@@ -1,0 +1,11 @@
+ACTION=="remove", GOTO="boss_end"
+SUBSYSTEM!="block", GOTO="boss_end"
+KERNEL!="sd*[!0-9]", GOTO="boss_end"
+ENV{ID_MODEL}!="DELLBOSS_VD", GOTO="boss_end"
+ENV{ID_SERIAL_SHORT}!="?*", GOTO="boss_end"
+
+IMPORT{program}="/usr/lib/udev/bossinfo.sh $env{ID_SERIAL_SHORT}"
+ENV{BOSS_LD_NAME}=="?*", SYMLINK+="disk/by-label/boss-$env{BOSS_LD_NAME}"
+LABEL="boss_end"
+
+

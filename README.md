@@ -1,8 +1,13 @@
 [![Docker Repository on Quay](https://quay.io/repository/frigault/megainfo/status "Docker Repository on Quay")](https://quay.io/repository/frigault/megainfo)
 [![Create and publish a Docker image](https://github.com/freedge/megainfo/actions/workflows/ci.yaml/badge.svg)](https://github.com/freedge/megainfo/actions/workflows/ci.yaml)
 
-Find the virtual disk name / wwn association.
-Use at your own risks.
+Find the virtual disk name / wwn association. Use at your own risks.
+
+I made that to see how difficult it was to find out virtual disk names from Linux, without using a proprietary tool, since there is no way to get the wwn from the bmc for a virtual drive, but it's possible to set up a user friendly name, and access it from Linux. That should allow the creation of a device with udev.
+
+PERC:
+
+That one uses an ioctl on the megaraid_sas_ioctl character device.
 
 ```
 # for a given host find the amount of available vd. Both numbers will need to be specified
@@ -32,6 +37,19 @@ for i in `seq 0 $(($(od /sys/kernel/debug/megaraid_sas/scsi_host0/raidmap_dump -
 To plug that into udev: see megainfo.sh and 69-megainfo.rules
 
 Packaged as an RPM https://copr.fedorainfracloud.org/coprs/frigo/megainfo/
+
+BOSS:
+
+Also adding a rule for Marvell (Dell BOSS) controllers vd names.
+That one uses an ioctl for SG_IO on the "Marvell Console" 88SE9230 device.
+
+```
+# udevadm info -q property --property=ID_SERIAL_SHORT /dev/sdd
+ID_SERIAL_SHORT=ATA_DELLBOSS_VD_d4d4eb9afeaa0010
+
+# bash bossinfo.sh ATA_DELLBOSS_VD_d4d4eb9afeaa0010
+BOSS_LD_NAME=vd-boss
+```
 
 References:
 - https://github.com/bonzini/qemu/blob/master/hw/scsi/megasas.c
