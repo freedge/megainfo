@@ -1,4 +1,3 @@
-[![Docker Repository on Quay](https://quay.io/repository/frigault/megainfo/status "Docker Repository on Quay")](https://quay.io/repository/frigault/megainfo)
 [![Create and publish a Docker image](https://github.com/freedge/megainfo/actions/workflows/ci.yaml/badge.svg)](https://github.com/freedge/megainfo/actions/workflows/ci.yaml)
 
 Find the virtual disk name / wwn association. Use at your own risks.
@@ -16,8 +15,6 @@ mknod /dev/megaraid_sas_ioctl_node c `grep -o -P '^\d\d\d(?= megaraid_sas_ioctl)
 # there should be a megaraid debug file for the host under /sys/kernel/debug/megaraid_sas/scsi_host0/raidmap_dump
 
 megainfo 0 /dev/megaraid_sas_ioctl_node
-# or
-podman run --network=none --privileged --volume /sys/kernel/debug:/sys/kernel/debug --device /dev/megaraid_sas_ioctl_node quay.io/frigault/megainfo:latest 0 /dev/megaraid_sas_ioctl_node
 # or
 podman run --network=none --privileged --volume /sys/kernel/debug:/sys/kernel/debug --device /dev/megaraid_sas_ioctl_node ghcr.io/freedge/megainfo:main 0 /dev/megaraid_sas_ioctl_node
 

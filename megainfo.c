@@ -32,8 +32,7 @@ static void autofreelocale(const locale_t* l) {
 		freelocale(*l);
 }
 
-// only dump the name if it contains a specific set of chars
-bool is_ok(const char* p) {
+static bool sanitize_name(char* p) {
 	if (*p == 0 || *p == ' ') {
 		return false;
 	}
@@ -45,6 +44,8 @@ bool is_ok(const char* p) {
 		    (*p == '-') ||
 		    (*p == '_')) {
 			// is fine
+		} else if (*p == ' ') {
+			*p = '_';
 		} else {
 			fprintf(stderr, "found invalid character in name 0x%02x\n", *p);
 			return false;
@@ -54,7 +55,7 @@ bool is_ok(const char* p) {
 }
 
 // read the wwn from inquiry page 0x83
-bool read_wwn(char* buf, const uint8_t* page83) {
+static bool read_wwn(char* buf, const uint8_t* page83) {
 	// reading the doc https://support.hpe.com/hpesc/public/docDisplay?docId=sd00001714en_us&docLocale=en_US&page=GUID-D7147C7F-2016-0901-065E-000000000484.html
 	// however page_length is on byte 3 in practice
 	if ((page83[0] == 0)          && // supported peripheral
@@ -73,7 +74,15 @@ bool read_wwn(char* buf, const uint8_t* page83) {
 	return false;
 }
 
-static int get_ld_count(struct MR_DRV_RAID_MAP* raid_map, int fd) {
+// read the raidmap from the megaraid_sas debug file
+static int parse_raid_map(struct MR_DRV_RAID_MAP* raid_map, int hostno) {
+	char path[256];
+	assert(sprintf(path, "/sys/kernel/debug/megaraid_sas/scsi_host%d/raidmap_dump", hostno) > 0);
+	const int fd __attribute__ ((__cleanup__(autoclose))) = open(path, O_RDONLY);
+	if (fd < 1) {
+		fprintf(stderr, "%s open failed %s\n", path, strerror(errno));
+		return -1;
+	}
 	assert(read(fd, raid_map, sizeof(*raid_map)) == sizeof(*raid_map));
 
 	return raid_map->ldCount;
@@ -90,6 +99,8 @@ int main(const int argc, const char* argv[]) {
 	if (argc == 4 && 32 != strlen(argv[3])) {
 		return -1;
 	}
+
+	int hostno = atoi(argv[1]);
 	const int fd __attribute__ ((__cleanup__(autoclose))) = open(argv[2], O_RDONLY);
 	if (fd < 1) {
 		fprintf(stderr, "%s open failed %s . Note that device needs to be created with\n"
@@ -97,21 +108,14 @@ int main(const int argc, const char* argv[]) {
 		return -1;
 	}
 
-	int hostno = atoi(argv[1]);
-	char path[256];
-	assert(sprintf(path, "/sys/kernel/debug/megaraid_sas/scsi_host%d/raidmap_dump", hostno) > 0);
-	const int fdump __attribute__ ((__cleanup__(autoclose))) = open(path, O_RDONLY);
-	if (fdump < 1) {
-		fprintf(stderr, "%s open failed %s\n", path, strerror(errno));
-		return -1;
-	}
-
 	struct MR_DRV_RAID_MAP raid_map;
-	int ldCount = get_ld_count(&raid_map, fdump);
+	int ldCount = parse_raid_map(&raid_map, hostno);
 	if (ldCount <= 0) {
 		return ldCount;
 	}
 	
+	// we are looking for a maximum of ldCount device, however if devices were created an deleted, there
+	// could be some gaps, we rely on the extracted raid map to tell us which id to use.
 	for (int i = 0; ldCount > 0 && i < MAX_RAIDMAP_LOGICAL_DRIVES; i++) {
 		if (raid_map.ldTgtIdToLd[i] == 255)
 			continue;
@@ -158,19 +162,19 @@ int main(const int argc, const char* argv[]) {
 			return -1;
 		}
 		if (ioc.frame.dcmd.cmd_status == MFI_STAT_DEVICE_NOT_FOUND) {
-			printf("# device not found\n");
+			fprintf(stderr, "device %d not found\n", i);
 			return -1;
 		}
 		if (ioc.frame.dcmd.cmd_status != MFI_STAT_OK) {
-			fprintf(stderr, "command failed 0x%02x\n", ioc.frame.dcmd.cmd_status);
+			fprintf(stderr, "command failed on device %d, 0x%02x\n", i, ioc.frame.dcmd.cmd_status);
 			return -1;
 		}
 		if (ld_info->vpd_page83[1] != 0x83) {
-			fprintf(stderr, "invalid page code 0x%02x\n", ld_info->vpd_page83[1]);
+			fprintf(stderr, "invalid page code on device %d, 0x%02x\n", i, ld_info->vpd_page83[1]);
 			return -1;
 		}
 		if (ld_info->ld_config.params.span_depth > MFI_MAX_SPAN_DEPTH) {
-			fprintf(stderr, "invalid span depth\n");
+			fprintf(stderr, "invalid span depth on device %d\n", i);
 		}
 		char wwn[33];
 		memset(wwn, '\0', sizeof(wwn));
@@ -180,14 +184,12 @@ int main(const int argc, const char* argv[]) {
 			}
 			printf("MEGA_LD_WWN=%s\n", wwn);
 		} else {
-			if (argc == 4) {
 				continue;
-			}
 		}
 
 
-		const char* buf = ld_info->ld_config.properties.name;
-		if (is_ok(buf)) {
+		char* buf = ld_info->ld_config.properties.name;
+		if (sanitize_name(buf)) {
 			printf("MEGA_LD_NAME=%.16s\n", buf);
 		}
 	}
