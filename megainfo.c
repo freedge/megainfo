@@ -16,28 +16,18 @@
 #include "mfi.h"
 
 
-// my own stuff then
-
 enum {
 	DATA_LEN = 512
 };
 
-void autofree(void* ptr_ptr) {
-	void* ptr = (void*) *((uintptr_t*) ptr_ptr);
-	free(ptr);
-}
-void automunmap(void* ptr_ptr) {
-	void* ptr = (void*) *((uintptr_t*) ptr_ptr);
-	assert(munmap(ptr, DATA_LEN) == 0);
-}
-void autoclose(void* ptr) {
-	int* fd = (int*) ptr;
+static void autoclose(const void* ptr) {
+	const int* fd = (const int*) ptr;
 	if (*fd > 0)
 		close(*fd);
 }
 
 // only dump the name if it contains a specific set of chars
-bool is_ok(char* p) {
+bool is_ok(const char* p) {
 	for (int i = 0; *p && i < 16; i++, p++) {
 		if ((*p >= '@' && *p <= 'Z') ||
 		    (*p >= 'a' && *p <= 'z') ||
@@ -54,7 +44,7 @@ bool is_ok(char* p) {
 }
 
 // read the wwn from inquiry page 0x83
-bool read_wwn(char* buf, uint8_t* page83) {
+bool read_wwn(char* buf, const uint8_t* page83) {
 	// reading the doc https://support.hpe.com/hpesc/public/docDisplay?docId=sd00001714en_us&docLocale=en_US&page=GUID-D7147C7F-2016-0901-065E-000000000484.html
 	// however page_length is on byte 3 in practice
 	if ((page83[0] == 0)          && // supported peripheral
@@ -73,7 +63,7 @@ bool read_wwn(char* buf, uint8_t* page83) {
 	return false;
 }
 
-int main(int argc, char* argv[]) {
+int main(const int argc, const char* argv[]) {
 	if (argc != 4 && argc != 5) {
 		fprintf(stderr, "usage: %s host_no ld_no /dev/megaraid_sas_ioctl_node [wwn]\n\n"
 				"This also retrieves the inquiry page that can be read with\n"
@@ -86,57 +76,59 @@ int main(int argc, char* argv[]) {
 	if (argc == 5 && 32 != strlen(argv[4])) {
 		return -1;
 	}
-	int fd __attribute__ ((__cleanup__(autoclose))) = open(argv[3], O_RDONLY);
+	const int fd __attribute__ ((__cleanup__(autoclose))) = open(argv[3], O_RDONLY);
 	if (fd < 1) {
 		fprintf(stderr, "open failed %s . Note that device needs to be created with\n"
 		     "  mknod /dev/megaraid_sas_ioctl_node c `grep -o -P '^\\d\\d\\d(?= megaraid_sas_ioctl)' /proc/devices` 0\n", strerror(errno));
 		return -1;
 	}
 
+	char ld_info_buf[DATA_LEN];
+	memset(ld_info_buf, '\0', sizeof(ld_info_buf));
+	struct mfi_ld_info* ld_info = (struct mfi_ld_info*) &ld_info_buf;
 
-	// use some memory from the heap to call ioctl. I am not sure it's a requirement
-	struct megasas_iocpacket *ioc __attribute__ ((__cleanup__(autofree))) = malloc(sizeof(struct megasas_iocpacket));
-	assert(ioc);
-	memset(ioc, '\0', sizeof(struct megasas_iocpacket));
-	ioc->host_no = atoi(argv[1]);
-	ioc->sgl_off = 40;
-	ioc->sge_count = 1;
-	ioc->sgl[0].iov_len = DATA_LEN;
-
-	struct megasas_dcmd_frame *frame = (struct megasas_dcmd_frame *) &(ioc->frame.raw[0]);
-	frame->cmd = MFI_CMD_DCMD;
-	frame->cmd_status = 0;
-	frame->opcode = MFI_DCMD_LD_GET_INFO;
-	frame->data_xfer_len = DATA_LEN;
-	frame->flags = MFI_FRAME_DIR_READ;
-	frame->sge_count = 1;
-	frame->sgl.sge32.length = DATA_LEN;
-	frame->mbox.w[0] = atoi(argv[2]);
-
-	// this time we need a address that fits in a 32 bit integer.
-	// I did not see other tools doing this with mmap (apparently malloc
-	// also returns a 32 bit address? But I don't know if there is
-	// any guarantee that it is always the case).
-	u8* u __attribute__ ((__cleanup__(automunmap))) = mmap(0, DATA_LEN,
-    		PROT_READ | PROT_WRITE,
-    		MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT,
-    		-1, 0
-	);
-	assert(u != MAP_FAILED);
-	memset(u, '\0', DATA_LEN);
-	frame->sgl.sge32.phys_addr = (__le32)(uintptr_t) u;
-	ioc->sgl[0].iov_base = u;
+	struct megasas_iocpacket ioc = {
+		.host_no = atoi(argv[1]),
+		.sgl_off = 40,
+		.sge_count = 1,
+		.sgl = {
+			{
+				.iov_len = DATA_LEN,
+				.iov_base = ld_info
+			}
+		},
+		.frame.dcmd = {
+			.cmd = MFI_CMD_DCMD,
+			.cmd_status = 0,
+			.opcode = MFI_DCMD_LD_GET_INFO,
+			.data_xfer_len = DATA_LEN,
+			.flags = MFI_FRAME_DIR_READ,
+			.sge_count = 1,
+			.sgl.sge32 = {
+				.length = DATA_LEN,
+				//.phys_addr = (__le32)(uintptr_t) ld_info
+				.phys_addr = 0
+			},
+			.mbox.w = {
+				atoi(argv[2])
+			}
+		}
+	};
 
 	// the actual work:
-	int res = ioctl (fd, MEGASAS_IOC_FIRMWARE, ioc);
+	const int res = ioctl (fd, MEGASAS_IOC_FIRMWARE, &ioc);
 
 	if (res < 0) {
 		fprintf(stderr, "ioctl failed %s\n", strerror(errno));
 		return -1;
 	}
-	struct mfi_ld_info* ld_info = (struct mfi_ld_info*) u;
+	if (ioc.frame.dcmd.cmd_status != MFI_STAT_OK) {
+		fprintf(stderr, "command failed 0x%02x%s\n", ioc.frame.dcmd.cmd_status,
+				ioc.frame.dcmd.cmd_status == MFI_STAT_DEVICE_NOT_FOUND ? " (device not found)" : "");
+		return -1;
+	}
 	if (ld_info->vpd_page83[1] != 0x83) {
-		fprintf(stderr, "invalid page code\n");
+		fprintf(stderr, "invalid page code 0x%02x\n", ld_info->vpd_page83[1]);
 		return -1;
 	}
 	if (ld_info->ld_config.params.span_depth > MFI_MAX_SPAN_DEPTH) {
@@ -156,7 +148,7 @@ int main(int argc, char* argv[]) {
 	}
 
 
-	char* buf = ld_info->ld_config.properties.name;
+	const char* buf = ld_info->ld_config.properties.name;
 	if (buf[0] && is_ok(buf)) {
 		printf("MEGA_LD_NAME=%.16s\n", buf);
 	}
