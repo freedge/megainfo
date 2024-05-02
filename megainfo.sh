@@ -7,9 +7,5 @@ grep -o -P '^\d\d\d(?= megaraid_sas_ioctl)' /proc/devices > /dev/null
 P=$(readlink -f $1)
 host_no=$(echo "${P}" | /usr/bin/grep -o -P '(?<=host)\d+')
 
-if [[ -e /sys/kernel/debug/megaraid_sas/scsi_host${host_no}/raidmap_dump ]] ; then
-  for i in `seq 0 $(($(od /sys/kernel/debug/megaraid_sas/scsi_host${host_no}/raidmap_dump -j 32 -N 2 -i -A none )- 1))` ;do
-    /usr/lib/udev/megainfo $host_no $i /dev/megaraid_sas_ioctl_node $2 && exit 0
-  done
-fi
-exit 1
+test -e /sys/kernel/debug/megaraid_sas/scsi_host${host_no}/raidmap_dump
+exec /usr/lib/udev/megainfo $host_no /dev/megaraid_sas_ioctl_node $2
