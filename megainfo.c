@@ -172,7 +172,7 @@ int main(const int argc, const char* argv[]) {
 			}
 			printf("MEGA_LD_WWN=%s\n", wwn);
 		} else {
-			if (argc == 5) {
+			if (argc == 4) {
 				continue;
 			}
 		}
