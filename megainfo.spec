@@ -4,7 +4,7 @@
 %global _udevlibdir %{_prefix}/lib/udev
 %global _udevrulesdir %{_prefix}/lib/udev/rules.d
 Name:           megainfo
-Version:        1.0.4
+Version:        1.1.0
 Release:        1%{?dist}
 Summary:        discover megaraid perc vd name
 

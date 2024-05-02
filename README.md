@@ -17,9 +17,9 @@ mknod /dev/megaraid_sas_ioctl_node c `grep -o -P '^\d\d\d(?= megaraid_sas_ioctl)
 
 megainfo 0 /dev/megaraid_sas_ioctl_node
 # or
-podman run --network=none --privileged --volume /sys/kernel/debug/megaraid_sas/scsi_host0/raidmap_dump:/sys/kernel/debug/megaraid_sas/scsi_host0/raidmap_dump --device /dev/megaraid_sas_ioctl_node quay.io/frigault/megainfo:latest 0 /dev/megaraid_sas_ioctl_node
+podman run --network=none --privileged --volume /sys/kernel/debug:/sys/kernel/debug --device /dev/megaraid_sas_ioctl_node quay.io/frigault/megainfo:latest 0 /dev/megaraid_sas_ioctl_node
 # or
-podman run --network=none --privileged --volume /sys/kernel/debug/megaraid_sas/scsi_host0/raidmap_dump:/sys/kernel/debug/megaraid_sas/scsi_host0/raidmap_dump --device /dev/megaraid_sas_ioctl_node ghcr.io/freedge/megainfo:main 0 /dev/megaraid_sas_ioctl_node
+podman run --network=none --privileged --volume /sys/kernel/debug:/sys/kernel/debug --device /dev/megaraid_sas_ioctl_node ghcr.io/freedge/megainfo:main 0 /dev/megaraid_sas_ioctl_node
 
 MEGA_LD_NAME=vd-root
 MEGA_LD_WWN=6d0946...
