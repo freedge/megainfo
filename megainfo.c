@@ -73,10 +73,10 @@ bool read_wwn(char* buf, const uint8_t* page83) {
 	return false;
 }
 
-int get_ld_count(int fd) {
-	struct MR_DRV_RAID_MAP raid_map;
-	assert(read(fd, &raid_map, sizeof(raid_map)) == sizeof(raid_map));
-	return raid_map.ldCount;
+static int get_ld_count(struct MR_DRV_RAID_MAP* raid_map, int fd) {
+	assert(read(fd, raid_map, sizeof(*raid_map)) == sizeof(*raid_map));
+
+	return raid_map->ldCount;
 }
 
 int main(const int argc, const char* argv[]) {
@@ -105,14 +105,19 @@ int main(const int argc, const char* argv[]) {
 		fprintf(stderr, "%s open failed %s\n", path, strerror(errno));
 		return -1;
 	}
-	int ldCount = get_ld_count(fdump);
 
+	struct MR_DRV_RAID_MAP raid_map;
+	int ldCount = get_ld_count(&raid_map, fdump);
 	if (ldCount <= 0) {
 		return ldCount;
 	}
 	
-	for (int i = 0; i < ldCount; i++) {
-		printf("# host%d vd%d\n", hostno, i);
+	for (int i = 0; ldCount > 0 && i < MAX_RAIDMAP_LOGICAL_DRIVES; i++) {
+		if (raid_map.ldTgtIdToLd[i] == 255)
+			continue;
+		ldCount -= 1;
+
+		printf("# host%d vd%d ld%d\n", hostno, i, raid_map.ldTgtIdToLd[i]);
 		char ld_info_buf[DATA_LEN];
 		memset(ld_info_buf, '\0', sizeof(ld_info_buf));
 		struct mfi_ld_info* ld_info = (struct mfi_ld_info*) &ld_info_buf;
@@ -154,7 +159,7 @@ int main(const int argc, const char* argv[]) {
 		}
 		if (ioc.frame.dcmd.cmd_status == MFI_STAT_DEVICE_NOT_FOUND) {
 			printf("# device not found\n");
-			continue;
+			return -1;
 		}
 		if (ioc.frame.dcmd.cmd_status != MFI_STAT_OK) {
 			fprintf(stderr, "command failed 0x%02x\n", ioc.frame.dcmd.cmd_status);
