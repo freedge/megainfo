@@ -152,9 +152,12 @@ int main(const int argc, const char* argv[]) {
 			fprintf(stderr, "ioctl failed %s\n", strerror(errno));
 			return -1;
 		}
+		if (ioc.frame.dcmd.cmd_status == MFI_STAT_DEVICE_NOT_FOUND) {
+			printf("# device not found\n");
+			continue;
+		}
 		if (ioc.frame.dcmd.cmd_status != MFI_STAT_OK) {
-			fprintf(stderr, "command failed 0x%02x%s\n", ioc.frame.dcmd.cmd_status,
-					ioc.frame.dcmd.cmd_status == MFI_STAT_DEVICE_NOT_FOUND ? " (device not found)" : "");
+			fprintf(stderr, "command failed 0x%02x\n", ioc.frame.dcmd.cmd_status);
 			return -1;
 		}
 		if (ld_info->vpd_page83[1] != 0x83) {
