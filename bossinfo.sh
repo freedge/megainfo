@@ -14,10 +14,32 @@ LDINFOREQ="00,02,00,00,01,00,00,00,00,00,${_RESERVED1},00"
 
 
 /usr/bin/sg_senddiag /dev/${DEVNAME} --raw \
-	${SENDPAGE},${SENDPARAM},${LDINFOREQ},00,ff,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff > /dev/null
+        ${SENDPAGE},${SENDPARAM},${LDINFOREQ},00,ff,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff,00,ff > /dev/null
 
-res=$(/usr/bin/sg_ses /dev/${DEVNAME} -p 0xe1 -HHH | tr -d ' ' | sed -e 's/../\\x&/g')
-name=$(echo -ne $res | od -j 114 -N 16  -A none -c | tr -d ' ' | grep -o -P '^[a-zA-Z0-9@_-]*')
-serial=$(echo -ne $res | od -j 90 -N 8  -A none -t x1 | tr -d ' ' | sed -e 's/\(.\)\(.\)/\2\1/g')
+# struct _LD_Info {
+#     u16;  # offset 76
+#     u8;
+#     u8;
+#     u16;
+#     u8;
+#     u8;
+#     u8;
+#     u8 LD_GUID[8];
+#     u8;
+#     u8;
+#     u8;
+#     u16;
+#     u16;
+#     u64;
+#     u8 Name[16];
+#     u16;
+#     u8;
+#     u8;
+#     u16;
+#     u32;
+# }
+res=$(/usr/bin/sg_ses /dev/${DEVNAME} -p 0xe1 -HHH | tr -d ' \n' | sed -e 's/../\\x&/g')
+name=$(echo -ne $res | od -j 108 -N 16  -A none -c | tr -d ' ' | grep -o -P '^[a-zA-Z0-9@_-]*')
+serial=$(echo -ne $res | od -j 85 -N 8  -A none -t x1 | tr -d ' ' | sed -e 's/\(.\)\(.\)/\2\1/g')
 
 [[ ${name} != '' ]] && [[ $1 == ATA_DELLBOSS_VD_${serial} ]] && echo BOSS_LD_NAME=${name}
